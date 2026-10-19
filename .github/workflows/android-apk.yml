@@ -49,15 +49,20 @@ jobs:
           cat > androidapp/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
+              id 'com.google.gms.google-services' version '4.4.2' apply false
           }
           EOF
           cat > androidapp/app/build.gradle <<'EOF'
-          plugins { id 'com.android.application' }
+          plugins { id 'com.android.application'; id 'com.google.gms.google-services' }
+          dependencies { implementation 'com.google.firebase:firebase-messaging:24.1.2' }
           android {
               namespace 'br.com.pedidoagil.marmitaja'
               compileSdk 35
-              defaultConfig { applicationId 'br.com.pedidoagil.marmitaja'; minSdk 24; targetSdk 35; versionCode 2; versionName '1.1.0' }
+              defaultConfig { applicationId 'br.com.pedidoagil.marmitaja'; minSdk 24; targetSdk 35; versionCode 3; versionName '1.2.0' }
           }
+          EOF
+          cat > androidapp/app/google-services.json <<'EOF'
+          {"project_info":{"project_number":"261198321850","project_id":"marmitaja-c2032","storage_bucket":"marmitaja-c2032.firebasestorage.app"},"client":[{"client_info":{"mobilesdk_app_id":"1:261198321850:android:898e709495eea544354a83","android_client_info":{"package_name":"br.com.pedidoagil.marmitaja"}},"oauth_client":[],"api_key":[{"current_key":"AIzaSyADAaHJE9aqdh3fVAvVhx-xhGnj7yf_FuI"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}
           EOF
           cat > androidapp/gradle.properties <<'EOF'
           org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m
@@ -66,7 +71,11 @@ jobs:
           cat > androidapp/app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <uses-permission android:name="android.permission.INTERNET"/>
+            <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
             <application android:icon="@drawable/marmitaja_icon" android:roundIcon="@drawable/marmitaja_icon" android:label="MarmitaJá" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false" android:allowBackup="false">
+              <service android:name=".MarmitaMessagingService" android:exported="false">
+                <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT"/></intent-filter>
+              </service>
               <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden">
                 <intent-filter>
                   <action android:name="android.intent.action.MAIN"/>
@@ -76,9 +85,52 @@ jobs:
             </application>
           </manifest>
           EOF
+          cat > androidapp/app/src/main/java/br/com/pedidoagil/marmitaja/MarmitaMessagingService.java <<'EOF'
+          package br.com.pedidoagil.marmitaja;
+          import com.google.firebase.messaging.FirebaseMessagingService;
+          import com.google.firebase.messaging.RemoteMessage;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Intent;
+          import android.media.RingtoneManager;
+          import android.os.Build;
+          import android.app.Notification;
+          public class MarmitaMessagingService extends FirebaseMessagingService {
+            public void onMessageReceived(RemoteMessage message) {
+              String title=message.getData().get("title");
+              String body=message.getData().get("body");
+              if(title==null && message.getNotification()!=null)title=message.getNotification().getTitle();
+              if(body==null && message.getNotification()!=null)body=message.getNotification().getBody();
+              if(title==null)title="MarmitaJá";if(body==null)body="Você tem uma atualização.";
+              String channel="marmitaja_alertas_v1";
+              NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+              if(Build.VERSION.SDK_INT>=26){
+                NotificationChannel nc=new NotificationChannel(channel,"Pedidos e atualizações",NotificationManager.IMPORTANCE_HIGH);
+                nc.setDescription("Alertas sonoros de pedidos para restaurantes e clientes");
+                nc.enableVibration(true);
+                nc.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION).build());
+                nm.createNotificationChannel(nc);
+              }
+              String role=message.getData().get("role");
+              Intent intent=new Intent(this,MainActivity.class);
+              intent.putExtra("open_route","customer".equals(role)?"#lojas":"#painel-restaurante");
+              intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+              PendingIntent pi=PendingIntent.getActivity(this,0,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+              Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,channel):new Notification.Builder(this);
+              b.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(title).setContentText(body).setAutoCancel(true).setContentIntent(pi).setPriority(Notification.PRIORITY_HIGH);
+              nm.notify((int)(System.currentTimeMillis()%Integer.MAX_VALUE),b.build());
+            }
+            public void onNewToken(String token){ super.onNewToken(token); }
+          }
+          EOF
           cat > androidapp/app/src/main/java/br/com/pedidoagil/marmitaja/MainActivity.java <<'EOF'
           package br.com.pedidoagil.marmitaja;
           import android.app.Activity;
+          import android.os.Build;
+          import android.Manifest;
+          import android.content.pm.PackageManager;
+          import com.google.firebase.messaging.FirebaseMessaging;
           import android.os.Bundle;
           import android.content.Intent;
           import android.net.Uri;
@@ -94,6 +146,8 @@ jobs:
             static final int FILE_REQ = 9001;
             public void onCreate(Bundle saved) {
               super.onCreate(saved);
+              if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},101);
+              FirebaseMessaging.getInstance().getToken().addOnSuccessListener(token -> android.util.Log.i("MarmitaPush","Token do dispositivo gerado"));
               web = new WebView(this);
               web.setBackgroundColor(Color.WHITE);
               setContentView(web);
@@ -119,7 +173,8 @@ jobs:
                   return true;
                 }
               });
-              web.loadUrl("https://marmitaja-delivery.vercel.app/#painel-restaurante");
+              String target=getIntent().getStringExtra("open_route");
+              web.loadUrl("https://marmitaja-delivery.vercel.app/"+(target==null?"#painel-restaurante":target));
             }
             @Override protected void onActivityResult(int request,int result,Intent data){
               super.onActivityResult(request,result,data);
@@ -139,10 +194,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp androidapp/app/build/outputs/apk/debug/app-debug.apk MarmitaJa.apk
-          if gh release view v1.1.0 >/dev/null 2>&1; then
-            gh release upload v1.1.0 MarmitaJa.apk --clobber
+          if gh release view v1.2.0 >/dev/null 2>&1; then
+            gh release upload v1.2.0 MarmitaJa.apk --clobber
           else
-            gh release create v1.1.0 MarmitaJa.apk --title "MarmitaJá Android v1.1.0" --notes "Primeira versão de teste do aplicativo Android. Acesso ao sistema MarmitaJá online."
+            gh release create v1.2.0 MarmitaJa.apk --title "MarmitaJá Android v1.2.0" --notes "Primeira versão de teste do aplicativo Android. Acesso ao sistema MarmitaJá online."
           fi
       - name: Disponibilizar APK para download
         uses: actions/upload-artifact@v4
