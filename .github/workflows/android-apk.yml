@@ -58,7 +58,7 @@ jobs:
           android {
               namespace 'br.com.pedidoagil.marmitaja'
               compileSdk 35
-              defaultConfig { applicationId 'br.com.pedidoagil.marmitaja'; minSdk 24; targetSdk 35; versionCode 4; versionName '1.3.0' }
+              defaultConfig { applicationId 'br.com.pedidoagil.marmitaja'; minSdk 24; targetSdk 35; versionCode 5; versionName '1.4.0' }
           }
           EOF
           cat > androidapp/app/google-services.json <<'EOF'
@@ -72,7 +72,7 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <uses-permission android:name="android.permission.INTERNET"/>
             <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-            <application android:icon="@drawable/marmitaja_icon" android:roundIcon="@drawable/marmitaja_icon" android:label="MarmitaJá" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false" android:allowBackup="false">
+            <application android:icon="@drawable/marmitaja_icon" android:roundIcon="@drawable/marmitaja_icon" android:label="Pedido Ágil" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false" android:allowBackup="false">
               <service android:name=".MarmitaMessagingService" android:exported="false">
                 <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT"/></intent-filter>
               </service>
@@ -212,10 +212,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp androidapp/app/build/outputs/apk/debug/app-debug.apk MarmitaJa.apk
-          if gh release view v1.3.0 >/dev/null 2>&1; then
-            gh release upload v1.3.0 MarmitaJa.apk --clobber
+          if gh release view v1.4.0 >/dev/null 2>&1; then
+            gh release upload v1.4.0 MarmitaJa.apk --clobber
           else
-            gh release create v1.3.0 MarmitaJa.apk --title "MarmitaJá Android v1.3.0" --notes "Primeira versão de teste do aplicativo Android. Acesso ao sistema MarmitaJá online."
+            gh release create v1.4.0 MarmitaJa.apk --title "Pedido Ágil Android v1.4.0" --notes "Primeira versão de teste do aplicativo Android. Nome do aplicativo alterado para Pedido Ágil. Mesma plataforma e notificações."
           fi
       - name: Disponibilizar APK para download
         uses: actions/upload-artifact@v4
