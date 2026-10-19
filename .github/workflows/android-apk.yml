@@ -58,7 +58,7 @@ jobs:
           android {
               namespace 'br.com.pedidoagil.marmitaja'
               compileSdk 35
-              defaultConfig { applicationId 'br.com.pedidoagil.marmitaja'; minSdk 24; targetSdk 35; versionCode 3; versionName '1.2.0' }
+              defaultConfig { applicationId 'br.com.pedidoagil.marmitaja'; minSdk 24; targetSdk 35; versionCode 4; versionName '1.3.0' }
           }
           EOF
           cat > androidapp/app/google-services.json <<'EOF'
@@ -127,6 +127,7 @@ jobs:
           cat > androidapp/app/src/main/java/br/com/pedidoagil/marmitaja/MainActivity.java <<'EOF'
           package br.com.pedidoagil.marmitaja;
           import android.app.Activity;
+          import android.webkit.JavascriptInterface;
           import android.os.Build;
           import android.Manifest;
           import android.content.pm.PackageManager;
@@ -147,7 +148,7 @@ jobs:
             public void onCreate(Bundle saved) {
               super.onCreate(saved);
               if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},101);
-              FirebaseMessaging.getInstance().getToken().addOnSuccessListener(token -> android.util.Log.i("MarmitaPush","Token do dispositivo gerado"));
+              FirebaseMessaging.getInstance().getToken().addOnSuccessListener(token -> android.util.Log.i("MarmitaPush","FCM pronto"));
               web = new WebView(this);
               web.setBackgroundColor(Color.WHITE);
               setContentView(web);
@@ -157,6 +158,23 @@ jobs:
               s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
               CookieManager.getInstance().setAcceptCookie(true);
               CookieManager.getInstance().setAcceptThirdPartyCookies(web,true);
+              web.addJavascriptInterface(new Object(){
+                @JavascriptInterface public void registerPush(String role,String slug,String session) {
+                  if(!("merchant".equals(role)||"customer".equals(role))||!slug.matches("[a-z0-9-]{3,40}")||!session.matches("[a-f0-9]{64}"))return;
+                  FirebaseMessaging.getInstance().getToken().addOnSuccessListener(token -> {
+                    try{
+                      java.net.HttpURLConnection conn=(java.net.HttpURLConnection)new java.net.URL("https://egnhgowhwzxemyhteact.supabase.co/functions/v1/marmitaja-push/register").openConnection();
+                      conn.setRequestMethod("POST");conn.setDoOutput(true);conn.setConnectTimeout(10000);conn.setReadTimeout(10000);
+                      conn.setRequestProperty("Content-Type","application/json");
+                      org.json.JSONObject body=new org.json.JSONObject();
+                      body.put("role",role);body.put("slug",slug);body.put("session",session);body.put("fcmToken",token);
+                      byte[] data=body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                      try(java.io.OutputStream os=conn.getOutputStream()){os.write(data);}
+                      conn.getInputStream().close();conn.disconnect();
+                    }catch(Exception e){android.util.Log.w("MarmitaPush","Registro não concluído");}
+                  });
+                }
+              },"MarmitaAndroid");
               web.setWebChromeClient(new WebChromeClient(){
                 public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
                   if(chooser!=null)chooser.onReceiveValue(null);
@@ -194,10 +212,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp androidapp/app/build/outputs/apk/debug/app-debug.apk MarmitaJa.apk
-          if gh release view v1.2.0 >/dev/null 2>&1; then
-            gh release upload v1.2.0 MarmitaJa.apk --clobber
+          if gh release view v1.3.0 >/dev/null 2>&1; then
+            gh release upload v1.3.0 MarmitaJa.apk --clobber
           else
-            gh release create v1.2.0 MarmitaJa.apk --title "MarmitaJá Android v1.2.0" --notes "Primeira versão de teste do aplicativo Android. Acesso ao sistema MarmitaJá online."
+            gh release create v1.3.0 MarmitaJa.apk --title "MarmitaJá Android v1.3.0" --notes "Primeira versão de teste do aplicativo Android. Acesso ao sistema MarmitaJá online."
           fi
       - name: Disponibilizar APK para download
         uses: actions/upload-artifact@v4
