@@ -161,7 +161,7 @@ jobs:
               web.addJavascriptInterface(new Object(){
                 @JavascriptInterface public void registerPush(String role,String slug,String session) {
                   if(!("merchant".equals(role)||"customer".equals(role))||!slug.matches("[a-z0-9-]{3,40}")||!session.matches("[a-f0-9]{64}"))return;
-                  FirebaseMessaging.getInstance().getToken().addOnSuccessListener(token -> {
+                  FirebaseMessaging.getInstance().getToken().addOnSuccessListener(token -> new Thread(() -> {
                     try{
                       java.net.HttpURLConnection conn=(java.net.HttpURLConnection)new java.net.URL("https://egnhgowhwzxemyhteact.supabase.co/functions/v1/marmitaja-push/register").openConnection();
                       conn.setRequestMethod("POST");conn.setDoOutput(true);conn.setConnectTimeout(10000);conn.setReadTimeout(10000);
@@ -172,7 +172,7 @@ jobs:
                       try(java.io.OutputStream os=conn.getOutputStream()){os.write(data);}
                       conn.getInputStream().close();conn.disconnect();
                     }catch(Exception e){android.util.Log.w("MarmitaPush","Registro não concluído");}
-                  });
+                  }).start());
                 }
               },"MarmitaAndroid");
               web.setWebChromeClient(new WebChromeClient(){
